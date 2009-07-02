@@ -4,13 +4,14 @@ import sys, os, os.path, xml.sax.handler
 from xml.sax import make_parser 
 
 class Handler(xml.sax.handler.ContentHandler) :
-  def __init__(self) :
-    pass
+  def __init__(self, datadir) :
+		self.datadir = datadir
+		self.text = ""
     
   def startElementNS(self, name, qname, attrs): 
     if name == ("http://www.xmpp.org/extensions/xep-0227.html#ns", "host") :
       self.server = attrs.getValueByQName("jid")
-      for dir in [os.path.join(self.server, d) for d in ["accounts", "roster", "private", "vcard"]] :
+      for dir in [self.getDataPath(d)  for d in ["accounts", "roster", "private", "vcard"]] :
         if not os.path.exists(dir) :
           os.makedirs(dir)
     elif name == ("http://www.xmpp.org/extensions/xep-0227.html#ns", "user") :
@@ -57,8 +58,11 @@ class Handler(xml.sax.handler.ContentHandler) :
   def characters(self, text) :
     self.text += text
 
+  def getDataPath(self, data) :
+    return os.path.join(self.datadir, self.encode(self.server), data)
+
   def getDataFileName(self, data) :
-    return os.path.join(self.server, data, self.user + ".dat")
+    return os.path.join(self.datadir, self.encode(self.server), data, self.encode(self.user) + ".dat")
 
   def getAttribute(self, attributes, attribute) :
     try :
@@ -66,10 +70,20 @@ class Handler(xml.sax.handler.ContentHandler) :
     except KeyError :
       return None
 
-assert(len(sys.argv) == 2)
+  def encode(self, name) :
+    return ''.join(map(self.encode_char, name))
 
-handler = Handler()
+  def encode_char(self, c) :
+    if c >= 'a' and c <= 'z' or c >= 'A' and c <= 'Z' :
+      return c
+    else :
+      return '%%%02x' % ord(c)
+
+if len(sys.argv) != 3 : 
+	print "Usage: " + sys.argv[0] + " <xep-227-input-file>.xml <prosody-data-dir>"
+	sys.exit(-1)
+
 parser = make_parser()    
 parser.setFeature(xml.sax.handler.feature_namespaces, 1)
-parser.setContentHandler(handler)
+parser.setContentHandler(Handler(sys.argv[2]))
 parser.parse(open(sys.argv[1]))
